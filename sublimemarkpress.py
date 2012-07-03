@@ -2,7 +2,7 @@ import sublime, sublime_plugin # sublime
 import xmlrpclib # wordpress
 
 class PublishCommand(sublime_plugin.TextCommand):
-	""" 
+	r""" 
 		** Pushes the curent active file to a metaweblog compatible blog **
 
 		# blog settings
@@ -12,6 +12,12 @@ class PublishCommand(sublime_plugin.TextCommand):
 			    "username": <username.,
 			    "password": <password>
 			}
+
+		# key mapping
+		Add an entry to Prefs -> Key Bindings - User to add a keyboard shortcut. I've used ctrl+alt+m:
+		[
+			{ "keys": ["ctrl+alt+m"], "command": "publish" }
+		]
 
 		# tags
 		blog tags are optional at the top of the file in the structure:
@@ -24,6 +30,9 @@ class PublishCommand(sublime_plugin.TextCommand):
 		# title
 		blog title is the first line following that section; if it starts with "#" then it's assumed
 		to be a markdown post
+
+		# markdown
+		If the file "markdown2.py" from the awesome repo https://github.com/trentm/python-markdown2/tree/master/lib exists, markdown is enabled
 	"""
 	def run(self, edit):
 
