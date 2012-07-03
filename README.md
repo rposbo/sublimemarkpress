@@ -8,6 +8,12 @@
 			    "password": <password>
 			}
 
+		# key mapping
+		Add an entry to Prefs -> Key Bindings - User to add a keyboard shortcut. I've used ctrl+alt+m:
+		[
+			{ "keys": ["ctrl+alt+m"], "command": "publish" }
+		]
+
 		# tags
 		blog tags are optional at the top of the file in the structure:
 		<!-- 
