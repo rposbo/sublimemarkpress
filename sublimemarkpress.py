@@ -55,43 +55,19 @@ class PublishCommand(sublime_plugin.TextCommand):
 		all_lines_in_page = self.view.lines(sublime.Region(0, self.view.size()))
 		header_lines = []
 
-		post_id = None
-		tags = ""
-		title = ""
-		status = "draft"
-
-		has_header_content = False
+		
 		# get the "header" (MB details)
-		if self.view.substr(all_lines_in_page[0]).startswith("<!--"):
-			has_header_content = True
-			self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
-
-			# post_id
-			if self.view.substr(all_lines_in_page[0]).startswith("#post_id"):
-				post_id = self.view.substr(all_lines_in_page[0]).split(":")[1]
-				self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
-
-			#post tags
-			if self.view.substr(all_lines_in_page[0]).startswith("#tags"):
-				tags = self.view.substr(all_lines_in_page[0]).split(":")[1]
-				self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
-
-			#post status
-			if self.view.substr(all_lines_in_page[0]).startswith("#status"):
-				status = self.view.substr(all_lines_in_page[0]).split(":")[1]
-				self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
-
-			self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
+		post_id, tags, status, has_header_content = self.GetHeaderContent(all_lines_in_page, header_lines)
 
 		#title
-		is_markdown = False
+		title, is_markdown =
 		if self.view.substr(all_lines_in_page[0]).startswith("# "):
 			title = self.view.substr(all_lines_in_page[0]).split("# ")[1]
 			is_markdown = True
 		else:
 			title = self.view.substr(all_lines_in_page[0])
 
-		self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
+		self.MoveCurrentLineToHeader(header_lines, all_lines_in_page) # what's this one for? I've refactored and missed something..
 
 		# get the "body" (content)
 		post_content = self.CombineContent(self.view, all_lines_in_page)
@@ -112,6 +88,31 @@ class PublishCommand(sublime_plugin.TextCommand):
 		else:
 			proxy.metaWeblog.editPost(post_id, mbUsername, mbPassword, content)
 			print("updated existing:", post_id)
+
+	def GetHeaderContent(self, all_lines_in_page, header_lines):
+		page_info = {"has_header_content":False,"post_id":None, "tags":"", "status":""}
+
+		if self.view.substr(all_lines_in_page[0]).startswith("<!--"):
+			page_info["has_header_content"] = True
+			self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
+
+			# post_id
+			if self.view.substr(all_lines_in_page[0]).startswith("#post_id"):
+				page_info["post_id"] = self.view.substr(all_lines_in_page[0]).split(":")[1]
+				self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
+
+			#post tags
+			if self.view.substr(all_lines_in_page[0]).startswith("#tags"):
+				page_info["tags"] = self.view.substr(all_lines_in_page[0]).split(":")[1]
+				self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
+
+			#post status
+			if self.view.substr(all_lines_in_page[0]).startswith("#status"):
+				page_info["status"] = self.view.substr(all_lines_in_page[0]).split(":")[1]
+				self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
+
+			self.MoveCurrentLineToHeader(header_lines, all_lines_in_page) # removes the closing comment tag
+		return page_info["post_id"],page_info["tags"],page_info["status"],page_info["has_header_content"]
 
 	def MoveCurrentLineToHeader(self, header_lines, all_lines_in_page):
 			header_lines.insert(len(header_lines),all_lines_in_page[0])
