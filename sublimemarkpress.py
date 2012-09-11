@@ -9,7 +9,7 @@ class PublishCommand(sublime_plugin.TextCommand):
 		Relies on a settings file called "sublimemarkpress.sublime-settings" using the structure:
 			{
 			    "xmlrpcurl": <URL to xml rpc endpoint>,
-			    "username": <username>,
+			    "username": <username.,
 			    "password": <password>
 			}
 
@@ -27,40 +27,64 @@ class PublishCommand(sublime_plugin.TextCommand):
 
 		# markdown
 		If the file "markdown2.py" from the awesome repo https://github.com/trentm/python-markdown2/tree/master/lib exists, markdown is enabled
-
-		# usage
-		Currently, you need to copy this file into the sublimetext packages/user directory. Then on the file you wish to post press ctrl+' and type "view.run_command('publish')"
-		
-		# key mapping -> doesn't pass the view, so not sure how to do this correctly yet.
 	"""
 	def run(self, edit):
+
+		can_markdown = False
+		try: 
+			import markdown2 # markdown
+			can_markdown = True
+		except ImportError:
+			can_markdown = False
+
 		# load settings
-		mbURL, mbUsername, mbPassword = self.GetBlogSettings()
-		header_lines = []
+		s = sublime.load_settings("sublimemarkpress.sublime-settings")
+		mbURL = s.get("xmlrpcurl")
+		mbUsername = s.get("username")
+		mbPassword = s.get("password")
+
+		blog_id = 0 # not currently used on wordpress
 
 		# get page content
 		all_lines_in_page = self.view.lines(sublime.Region(0, self.view.size()))
+		header_lines = []
 
+		
 		# get the "header" (MB details)
-		post_id, tags, status, title, has_header_content, is_markdown = self.GetHeaderContent(header_lines, all_lines_in_page)
+		post_id, tags, status, has_header_content = self.GetHeaderContent(all_lines_in_page, header_lines)
+
+		#title
+		title, is_markdown = "", False
+		if self.view.substr(all_lines_in_page[0]).startswith("# "):
+			title = self.view.substr(all_lines_in_page[0]).split("# ")[1]
+			is_markdown = True
+		else:
+			title = self.view.substr(all_lines_in_page[0])
+
+		self.MoveCurrentLineToHeader(header_lines, all_lines_in_page) # what's this one for? I've refactored and missed something..
 
 		# get the "body" (content)
-		post_content = self.GetPostBody(self.view, all_lines_in_page, is_markdown)
+		post_content = self.CombineContent(self.view, all_lines_in_page)
 
-		body_content = self.BuildPostPayload(self.view, {"content": post_content, "title": title, "tags": tags, "status": status})
+		# markdown content
+		if is_markdown and can_markdown:
+			post_content = str(markdown2.markdown(post_content,extras=["code-friendly"]))
+
+		content = self.BuildPostContent(self.view, {"content": post_content, "title": title, "tags": tags, "status": status})
 
 		# save to MB
-		new_post_id = self.PostToBlog(self.view, mbURL, mbUsername, mbPassword, post_id, body_content)
+		proxy = xmlrpclib.ServerProxy(mbURL)
 
-		if not new_post_id == post_id:
-			self.PrefixPostHeader(self.view, edit, new_post_id, header_lines, has_header_content)
-	
-	def GetBlogSettings(self):
-		s = sublime.load_settings("sublimemarkpress.sublime-settings")
-		return s.get("xmlrpcurl"), s.get("username"), s.get("password")
+		if post_id == None:
+			post_id = proxy.metaWeblog.newPost(blog_id, mbUsername, mbPassword, content)
+			self.PrefixPostHeader(self.view, edit, post_id, header_lines, has_header_content)
+			print("created new:", post_id)
+		else:
+			proxy.metaWeblog.editPost(post_id, mbUsername, mbPassword, content)
+			print("updated existing:", post_id)
 
-	def GetHeaderContent(self, header_lines, all_lines_in_page):
-		page_info = {"has_header_content":False,"post_id":None, "tags":"", "status":"", "title":"","is_markdown":False}
+	def GetHeaderContent(self, all_lines_in_page, header_lines):
+		page_info = {"has_header_content":False,"post_id":None, "tags":"", "status":""}
 
 		if self.view.substr(all_lines_in_page[0]).startswith("<!--"):
 			page_info["has_header_content"] = True
@@ -82,36 +106,17 @@ class PublishCommand(sublime_plugin.TextCommand):
 				self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
 
 			self.MoveCurrentLineToHeader(header_lines, all_lines_in_page) # removes the closing comment tag
-
-			if self.view.substr(all_lines_in_page[0]).startswith("# "):
-				page_info["title"] = self.view.substr(all_lines_in_page[0]).split("# ")[1]
-				page_info["is_markdown"] = True
-			else:
-				title = self.view.substr(all_lines_in_page[0])
-
-		self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
-
-		return	page_info["post_id"], page_info["tags"], page_info["status"], page_info["title"], page_info["has_header_content"], page_info["is_markdown"]
+		return page_info["post_id"],page_info["tags"],page_info["status"],page_info["has_header_content"]
 
 	def MoveCurrentLineToHeader(self, header_lines, all_lines_in_page):
 			header_lines.insert(len(header_lines),all_lines_in_page[0])
 			all_lines_in_page.remove(all_lines_in_page[0])
 
-	def BuildPostPayload(self, view, page_data):		
+	def BuildPostContent(self, view, page_data):		
 		return {"description": page_data["content"], "post_content": page_data["content"], "title": page_data["title"], "mt_keywords": page_data["tags"], "post_status": page_data["status"]}
 
-	def GetPostBody(self, view, lines, is_markdown):
-		can_markdown = False
-		try: 
-			import markdown2 # markdown
-			can_markdown = True
-		except ImportError:
-			can_markdown = False
-
-		body_content = view.substr(sublime.Region(lines[0].begin(),lines[len(lines)-1].end()))
-		if is_markdown & can_markdown:
-			body_content = str(markdown2.markdown(body_content))
-		return body_content
+	def CombineContent(self, view, lines):
+		return view.substr(sublime.Region(lines[0].begin(),lines[len(lines)-1].end()))
 
 	def PrefixPostHeader(self, view, edit, post_id, header_lines, has_header):
 		post_header = "<!--" + '\n' + "#post_id:" + str(post_id) + '\n'
@@ -122,15 +127,3 @@ class PublishCommand(sublime_plugin.TextCommand):
 			view.replace(edit, sublime.Region(0, end_point), post_header)
 		else:
 			view.replace(edit, sublime.Region(0,0), post_header + "-->" + '\n')
-
-	def PostToBlog(self, view, url, username, password, post_id, blog_content):
-		proxy = xmlrpclib.ServerProxy(url)
-
-		if post_id == None:
-			post_id = proxy.metaWeblog.newPost(0, username, password, blog_content)
-			print("created new:", post_id)
-		else:
-			proxy.metaWeblog.editPost(post_id, username, password, blog_content)
-			print("updated existing:", post_id)
-
-		return post_id
