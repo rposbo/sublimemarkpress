@@ -13,12 +13,6 @@ class PublishCommand(sublime_plugin.TextCommand):
 			    "password": <password>
 			}
 
-		# key mapping
-		Add an entry to Prefs -> Key Bindings - User to add a keyboard shortcut. I've used ctrl+alt+m:
-		[
-			{ "keys": ["ctrl+alt+m"], "command": "publish" }
-		]
-
 		# tags
 		blog tags are optional at the top of the file in the structure:
 		<!-- 
@@ -60,7 +54,7 @@ class PublishCommand(sublime_plugin.TextCommand):
 		post_id, tags, status, has_header_content = self.GetHeaderContent(all_lines_in_page, header_lines)
 
 		#title
-		title, is_markdown =
+		title, is_markdown = "", False
 		if self.view.substr(all_lines_in_page[0]).startswith("# "):
 			title = self.view.substr(all_lines_in_page[0]).split("# ")[1]
 			is_markdown = True
@@ -74,7 +68,7 @@ class PublishCommand(sublime_plugin.TextCommand):
 
 		# markdown content
 		if is_markdown and can_markdown:
-			post_content = str(markdown2.markdown(post_content))
+			post_content = str(markdown2.markdown(post_content,extras=["code-friendly"]))
 
 		content = self.BuildPostContent(self.view, {"content": post_content, "title": title, "tags": tags, "status": status})
 
