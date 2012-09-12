@@ -27,4 +27,4 @@ If the file "markdown2.py" from the awesome repo https://github.com/trentm/pytho
 Currently, you need to copy this file into the sublimetext packages/user directory. Then on the file you wish to post press ctrl+' and type "view.run_command('publish')"
 
 ## key mapping
-Doesn't pass the view, so not sure how to do this correctly yet.
+Doesn't pass the "view", so not sure how to do this correctly yet.
