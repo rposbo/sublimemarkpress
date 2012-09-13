@@ -1,5 +1,4 @@
 import sublime, sublime_plugin # sublime
-import xmlrpclib # wordpress
 
 class PublishCommand(sublime_plugin.TextCommand):
 	r""" 
@@ -29,59 +28,32 @@ class PublishCommand(sublime_plugin.TextCommand):
 		If the file "markdown2.py" from the awesome repo https://github.com/trentm/python-markdown2/tree/master/lib exists, markdown is enabled
 	"""
 	def run(self, edit):
-
-		can_markdown = False
-		try: 
-			import markdown2 # markdown
-			can_markdown = True
-		except ImportError:
-			can_markdown = False
-
-		# load settings
-		s = sublime.load_settings("sublimemarkpress.sublime-settings")
-		mbURL = s.get("xmlrpcurl")
-		mbUsername = s.get("username")
-		mbPassword = s.get("password")
-
-		blog_id = 0 # not currently used on wordpress
-
 		# get page content
 		all_lines_in_page = self.view.lines(sublime.Region(0, self.view.size()))
 		header_lines = []
-
 		
 		# get the "header" (MB details)
 		post_id, tags, status, has_header_content = self.GetHeaderContent(all_lines_in_page, header_lines)
 
 		#title
-		title, is_markdown = "", False
-		if self.view.substr(all_lines_in_page[0]).startswith("# "):
-			title = self.view.substr(all_lines_in_page[0]).split("# ")[1]
-			is_markdown = True
-		else:
-			title = self.view.substr(all_lines_in_page[0])
-
-		self.MoveCurrentLineToHeader(header_lines, all_lines_in_page) # what's this one for? I've refactored and missed something..
+		title, is_markdown = self.GetTitle(self.view, all_lines_in_page, header_lines)
 
 		# get the "body" (content)
-		post_content = self.CombineContent(self.view, all_lines_in_page)
+		post_content = self.GetPostContent(self.view,all_lines_in_page, is_markdown)
 
-		# markdown content
-		if is_markdown and can_markdown:
-			post_content = str(markdown2.markdown(post_content,extras=["code-friendly"]))
-
+		# create request
 		content = self.BuildPostContent(self.view, {"content": post_content, "title": title, "tags": tags, "status": status})
 
 		# save to MB
-		proxy = xmlrpclib.ServerProxy(mbURL)
+		new_post, post_id = self.SaveToMetaWeblog(self.view, edit, post_id, self.LoadMetaBlogSettings(), content)
 
-		if post_id == None:
-			post_id = proxy.metaWeblog.newPost(blog_id, mbUsername, mbPassword, content)
+		#  update active window with post id, if new
+		if new_post:
 			self.PrefixPostHeader(self.view, edit, post_id, header_lines, has_header_content)
-			print("created new:", post_id)
-		else:
-			proxy.metaWeblog.editPost(post_id, mbUsername, mbPassword, content)
-			print("updated existing:", post_id)
+
+	def LoadMetaBlogSettings(self):
+		s = sublime.load_settings("sublimemarkpress.sublime-settings")
+		return {"url": s.get("xmlrpcurl"), "username": s.get("username"), "password": s.get("password")}
 
 	def GetHeaderContent(self, all_lines_in_page, header_lines):
 		page_info = {"has_header_content":False,"post_id":None, "tags":"", "status":""}
@@ -108,6 +80,34 @@ class PublishCommand(sublime_plugin.TextCommand):
 			self.MoveCurrentLineToHeader(header_lines, all_lines_in_page) # removes the closing comment tag
 		return page_info["post_id"],page_info["tags"],page_info["status"],page_info["has_header_content"]
 
+	def GetTitle(self, view, all_lines_in_page, header_lines):
+		if self.view.substr(all_lines_in_page[0]).startswith("# "):
+			title = self.view.substr(all_lines_in_page[0]).split("# ")[1]
+			is_markdown = True
+		else:
+			title = self.view.substr(all_lines_in_page[0])
+		
+		# remove the title from the content (else it'll get repeated within the content)		
+		self.MoveCurrentLineToHeader(header_lines, all_lines_in_page)
+
+		return title, is_markdown
+
+	def GetPostContent(self, view, all_lines_in_page, is_markdown):
+		post_content = self.CombineContent(self.view, all_lines_in_page)
+
+		can_markdown = False
+		try: 
+			import markdown2 # markdown
+			can_markdown = True
+		except ImportError:
+			can_markdown = False
+
+		# markdown content
+		if is_markdown and can_markdown:
+			post_content = str(markdown2.markdown(post_content,extras=["code-friendly"]))
+
+		return post_content
+
 	def MoveCurrentLineToHeader(self, header_lines, all_lines_in_page):
 			header_lines.insert(len(header_lines),all_lines_in_page[0])
 			all_lines_in_page.remove(all_lines_in_page[0])
@@ -127,3 +127,20 @@ class PublishCommand(sublime_plugin.TextCommand):
 			view.replace(edit, sublime.Region(0, end_point), post_header)
 		else:
 			view.replace(edit, sublime.Region(0,0), post_header + "-->" + '\n')
+
+	def SaveToMetaWeblog(self, view, edit, post_id, blog_settings, content):
+		import xmlrpclib # wordpress
+
+		updated = False
+
+		proxy = xmlrpclib.ServerProxy(blog_settings["url"])
+		if post_id == None:
+			blog_id = 0 # not currently used on wordpress
+			post_id = proxy.metaWeblog.newPost(blog_id, blog_settings["username"], blog_settings["password"], content)
+			updated = True
+			print("created new:", post_id)
+		else:
+			proxy.metaWeblog.editPost(post_id, blog_settings["username"], blog_settings["password"], content)
+			print("updated existing:", post_id)
+
+		return updated, post_id
