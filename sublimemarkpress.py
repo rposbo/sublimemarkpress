@@ -81,6 +81,7 @@ class PublishCommand(sublime_plugin.TextCommand):
 		return page_info["post_id"],page_info["tags"],page_info["status"],page_info["has_header_content"]
 
 	def GetTitle(self, view, all_lines_in_page, header_lines):
+		is_markdown = False
 		if self.view.substr(all_lines_in_page[0]).startswith("# "):
 			title = self.view.substr(all_lines_in_page[0]).split("# ")[1]
 			is_markdown = True
